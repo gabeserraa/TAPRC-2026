@@ -35,3 +35,14 @@ def chamados(myTimer: func.TimerRequest) -> None:
                 logging.info(row)
     except Exception as e:
         logging.error(f"Erro ao conectar/consultar o banco: {e}")
+
+
+def analista(myTimer: func.TimerRequest) -> None:
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT TOP 10 * FROM itsm.analista")
+            for row in cursor.fetchall():
+                logging.info(row)
+    except Exception as e:
+        logging.error(f"Erro ao conectar/consultar o banco: {e}")        
