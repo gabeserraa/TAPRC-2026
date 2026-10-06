@@ -26,11 +26,11 @@ def get_connection():
 
 @app.timer_trigger(schedule="0 * * * * *", arg_name="myTimer",
                    run_on_startup=False, use_monitor=False)
-def chamados(myTimer: func.TimerRequest) -> None:
+def analista(myTimer: func.TimerRequest) -> None:
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT TOP 10 * FROM itsm.chamado")
+            cursor.execute("SELECT TOP 10 * FROM itsm.analista")
             for row in cursor.fetchall():
                 logging.info(row)
     except Exception as e:
