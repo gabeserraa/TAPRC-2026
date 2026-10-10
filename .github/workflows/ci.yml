@@ -11,3 +11,6 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 --version
       - run: python3 -m py_compile function_app.py
+      - run: pip install ruff
+      - name: Linting (ruff)
+        run: ruff check .
