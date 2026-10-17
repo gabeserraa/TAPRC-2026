@@ -140,3 +140,5 @@ def sla(myTimer: func.TimerRequest) -> None:
 )
 def solicitante(myTimer: func.TimerRequest) -> None:
     executar("solicitante")
+
+massa
