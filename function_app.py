@@ -8,6 +8,7 @@ app = func.FunctionApp()
 logger = logging.getLogger(__name__)
 
 # A cada 5 minutos (formato NCRONTAB: seg min hora dia mês dia-semana)
+# Teste
 SCHEDULE = "0 */5 * * * *"
 
 
