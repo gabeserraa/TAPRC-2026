@@ -1,143 +1,97 @@
+
+import json
 import logging
 import os
+from datetime import datetime, timezone
 
-import azure.functions as func
 import pyodbc
+import azure.functions as func
+from azure.storage.filedatalake import DataLakeServiceClient
 
 app = func.FunctionApp()
-logger = logging.getLogger(__name__)
-
-# A cada 5 minutos (formato NCRONTAB: seg min hora dia mês dia-semana)
-# Teste
-SCHEDULE = "0 */5 * * * *"
 
 
-def get_connection():
-    """Abre a conexão usando SOMENTE variáveis de ambiente (nada de credencial no código)."""
-    host = os.getenv("DB_HOST")
-    database = os.getenv("DB_NAME")
-    user = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
+@app.timer_trigger(
+    schedule="0 * * * * *",
+    arg_name="myTimer",
+    run_on_startup=False,
+    use_monitor=False
+)
+def extract_chamado(myTimer: func.TimerRequest) -> None:
+    logging.info("Iniciando extracao da tabela itsm.chamado")
 
-    faltando = [
-        nome
-        for nome, valor in {
-            "DB_HOST": host,
-            "DB_NAME": database,
-            "DB_USER": user,
-            "DB_PASSWORD": password,
-        }.items()
-        if not valor
-    ]
-    if faltando:
-        raise RuntimeError(
-            f"Variáveis de ambiente não definidas: {', '.join(faltando)}"
-        )
+    sql_server = os.environ["HOST"]
+    sql_database = os.environ["DATABASE"]
+    sql_user = os.environ["USER"]
+    sql_pass = os.environ["PASSWORD"]
 
     conn_str = (
         "DRIVER={ODBC Driver 18 for SQL Server};"
-        f"SERVER=tcp:{host};"
-        f"DATABASE={database};"
-        f"UID={user};"
-        f"PWD={password};"
+        f"SERVER={sql_server};"
+        f"DATABASE={sql_database};"
+        f"UID={sql_user};"
+        f"PWD={sql_pass};"
         "Encrypt=yes;"
         "TrustServerCertificate=no;"
         "Connection Timeout=30;"
     )
-    return pyodbc.connect(conn_str)
 
-
-def extrair_tabela(tabela: str) -> list[dict]:
-    """Executa SELECT * na tabela do schema itsm e devolve as linhas como dicionários."""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(f"SELECT * FROM itsm.{tabela}")
-        colunas = [col[0] for col in cursor.description]
-        linhas = [dict(zip(colunas, row)) for row in cursor.fetchall()]
-
-    logger.info(f"[itsm.{tabela}] {len(linhas)} linha(s) extraída(s)")
-    for linha in linhas[:5]:  # mostra só uma amostra no log
-        logger.info(f"[itsm.{tabela}] {linha}")
-    return linhas
-
-
-def executar(tabela: str) -> None:
     try:
-        extrair_tabela(tabela)
-    except (pyodbc.Error, RuntimeError) as e:
-        logger.error(f"[itsm.{tabela}] Erro ao conectar/consultar o banco: {e}")
+        # 1. Extrair os dados do SQL Server
+        with pyodbc.connect(conn_str) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM itsm.chamado")
 
+            columns = [col[0] for col in cursor.description]
+            rows = cursor.fetchall()
 
-# ---------------------------------------------------------------------------
-# Uma Azure Function (timer trigger) para cada tabela do banco de origem
-# ---------------------------------------------------------------------------
+            dados = [
+                dict(zip(columns, row))
+                for row in rows
+            ]
 
+        logging.info(f"Registros extraidos: {len(dados)}")
 
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def analista(myTimer: func.TimerRequest) -> None:
-    executar("analista")
+        # 2. Converter os registros para JSON
+        conteudo_json = json.dumps(
+            dados,
+            ensure_ascii=False,
+            indent=2,
+            default=str
+        )
 
+        # 3. Criar o caminho particionado por data UTC
+        now = datetime.now(timezone.utc)
 
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def categoria(myTimer: func.TimerRequest) -> None:
-    executar("categoria")
+        diretorio = (
+            f"itsm/chamados/"
+            f"ano={now:%Y}/"
+            f"mes={now:%m}/"
+            f"dia={now:%d}"
+        )
 
+        nome_arquivo = (
+            f"chamados_{now:%Y%m%dT%H%M%SZ}.json"
+        )
 
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def chamado(myTimer: func.TimerRequest) -> None:
-    executar("chamado")
+        file_path = f"{diretorio}/{nome_arquivo}"
 
+        # 4. Conectar ao Azure Data Lake
+        datalake = DataLakeServiceClient.from_connection_string(
+            os.environ["DATALAKE_CONNECTION_STRING"]
+        )
 
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def chamado_sla(myTimer: func.TimerRequest) -> None:
-    executar("chamado_sla")
+        # 5. Gravar o arquivo no container Bronze
+        file_system = datalake.get_file_system_client("bronze")
+        file_client = file_system.get_file_client(file_path)
 
+        file_client.upload_data(
+            conteudo_json.encode("utf-8"),
+            overwrite=False
+        )
 
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def chamado_status_historico(myTimer: func.TimerRequest) -> None:
-    executar("chamado_status_historico")
+        logging.info(f"Arquivo gravado: bronze/{file_path}")
 
-
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def cliente_organizacao(myTimer: func.TimerRequest) -> None:
-    executar("cliente_organizacao")
-
-
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def csat_avaliacao(myTimer: func.TimerRequest) -> None:
-    executar("csat_avaliacao")
-
-
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def fila(myTimer: func.TimerRequest) -> None:
-    executar("fila")
-
-
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def sla(myTimer: func.TimerRequest) -> None:
-    executar("sla")
-
-
-@app.timer_trigger(
-    schedule=SCHEDULE, arg_name="myTimer", run_on_startup=False, use_monitor=False
-)
-def solicitante(myTimer: func.TimerRequest) -> None:
-    executar("solicitante")
+    except Exception:
+        logging.exception("Erro durante a extracao de itsm.chamado")
+        raise
