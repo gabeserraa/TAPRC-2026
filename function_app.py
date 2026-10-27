@@ -25,8 +25,6 @@ def extract_chamado(myTimer: func.TimerRequest) -> None:
     sql_user = os.environ["USER"]
     sql_pass = os.environ["PASSWORD"]
 
-    logging.info(f"Testeeeeeeee")
-
     conn_str = (
         "DRIVER={ODBC Driver 18 for SQL Server};"
         f"SERVER={sql_server};"
@@ -37,6 +35,8 @@ def extract_chamado(myTimer: func.TimerRequest) -> None:
         "TrustServerCertificate=no;"
         "Connection Timeout=30;"
     )
+
+    logging.info(f"Testeeeeeeee")
 
     try:
         # 1. Extrair os dados do SQL Server
