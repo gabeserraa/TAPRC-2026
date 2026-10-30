@@ -6,8 +6,7 @@ from datetime import datetime, timezone
 
 import pyodbc
 import azure.functions as func
-from azure.storage.filedatalake import DataLakeServiceClient
-
+from azure.storage.blob import BlobServiceClient
 app = func.FunctionApp()
 
 
@@ -39,7 +38,6 @@ def extract_chamado(myTimer: func.TimerRequest) -> None:
     logging.info(f"Testeeeeeeee")
 
     try:
-        # 1. Extrair os dados do SQL Server
         with pyodbc.connect(conn_str) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM itsm.chamado")
@@ -54,7 +52,6 @@ def extract_chamado(myTimer: func.TimerRequest) -> None:
 
         logging.info(f"Registros extraidos: {len(dados)}")
 
-        # 2. Converter os registros para JSON
         conteudo_json = json.dumps(
             dados,
             ensure_ascii=False,
@@ -62,7 +59,6 @@ def extract_chamado(myTimer: func.TimerRequest) -> None:
             default=str
         )
 
-        # 3. Criar o caminho particionado por data UTC
         now = datetime.now(timezone.utc)
 
         diretorio = (
@@ -78,16 +74,17 @@ def extract_chamado(myTimer: func.TimerRequest) -> None:
 
         file_path = f"{diretorio}/{nome_arquivo}"
 
-        # 4. Conectar ao Azure Data Lake
-        datalake = DataLakeServiceClient.from_connection_string(
+        # 4. Conectar ao Storage
+        blob_service = BlobServiceClient.from_connection_string(
             os.environ["DATALAKE_CONNECTION_STRING"]
         )
 
         # 5. Gravar o arquivo no container Bronze
-        file_system = datalake.get_file_system_client("bronze")
-        file_client = file_system.get_file_client(file_path)
-
-        file_client.upload_data(
+        blob_client = blob_service.get_blob_client(
+            container="bronze",
+            blob=file_path
+        )
+        blob_client.upload_blob(
             conteudo_json.encode("utf-8"),
             overwrite=False
         )

@@ -6,4 +6,4 @@ azure-functions
 pyodbc
 requests
 azure-functions-durable
-azure-storage-file-datalake
+azure-storage-blob
