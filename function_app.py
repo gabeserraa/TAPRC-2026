@@ -20,10 +20,10 @@ app = func.FunctionApp()
 def extract_chamado(myTimer: func.TimerRequest) -> None:
     logging.info("Iniciando extracao da tabela itsm.chamado")
 
-    sql_server = os.environ["HOST"]
-    sql_database = os.environ["DATABASE"]
-    sql_user = os.environ["USER"]
-    sql_pass = os.environ["PASSWORD"]
+    sql_server = os.environ["DB_HOST"]
+    sql_database = os.environ["DB_NAME"]
+    sql_user = os.environ["DB_USER"]
+    sql_pass = os.environ["DB_PASSWORD"]
 
     conn_str = (
         "DRIVER={ODBC Driver 18 for SQL Server};"
