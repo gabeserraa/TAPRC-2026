@@ -67,7 +67,7 @@ def gravar_bronze(blob_service, tabela: str, dados: list[dict], now: datetime) -
 
 
 @app.timer_trigger(
-    schedule="0 * * * * *",  # a cada minuto; ex.: "0 0 * * * *" = de hora em hora
+    schedule="0 * * * * *",
     arg_name="myTimer",
     run_on_startup=False,
     use_monitor=False,
